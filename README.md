@@ -23,7 +23,7 @@ Result example: {
  - After clone please do a npm install in order to install the neccessary libraries.
  - $ npm install
  - Setup a databse with xampp or lamp or any other way you would.
- - The [config] file contains the connection informations.
+ - The ormconfig.json file contains the connection informations.
 
 ## Running the app
 
@@ -46,5 +46,3 @@ $ npm run test:e2e
 # test coverage
 $ npm run test:cov
 ```
-[//]:
-[config]: <./ormconfig.json>
