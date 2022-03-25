@@ -1,4 +1,5 @@
 import { Controller, Post, UsePipes, Body } from '@nestjs/common';
+import { ExchangeRateService } from 'src/exchange-rate/exchange-rate.service';
 import { TransactionService } from './transaction.service';
 import { transactionBodySchema } from './transaction.validation';
 import { BodyValidationPipe } from '../pipes/body.validation.pipe';
@@ -10,7 +11,6 @@ import {
   DefaultCommissionAmount,
   HighTurnoverDiscount,
 } from './transaction.dto';
-import { ExchangeRateService } from 'src/exchange-rate/exchange-rate.service';
 
 @Controller('transaction')
 export class TransactionController {
@@ -27,32 +27,47 @@ export class TransactionController {
     return JSON.stringify({
       amount:
         transactionInput.currency !== Currency.EUR
-          ? await this.getAmountWithExchange(transactionInput)
-          : await this.getAmountWithoutExchange(transactionInput),
+          ? parseFloat(
+              await this.getAmountWithExchange(transactionInput),
+            ).toFixed(2)
+          : parseFloat(
+              await this.getAmountWithoutExchange(transactionInput),
+            ).toFixed(2),
       currency: Currency.EUR,
     });
   }
 
   getClientDeposit = async (transactionInput: TransactionInput) => {
-    const deposit = this.transactionService.findByClientIdWithinActualMonth(
-      transactionInput.client_id,
-    );
-    if (deposit) {
-      const initialDeposit = 0;
-      const totalDeposit = (await deposit).reduce(
-        (prevAmmount, transactionAmmount) =>
-          prevAmmount + transactionAmmount.base_amount,
-        initialDeposit,
-      );
-      return totalDeposit;
+    try {
+      const deposit =
+        await this.transactionService.findByClientIdWithinActualMonth(
+          transactionInput.client_id,
+        );
+
+      if (deposit) {
+        const initialDeposit = 0;
+        const totalDeposit = (await deposit).reduce(
+          (prevAmmount, transactionAmmount) =>
+            prevAmmount + transactionAmmount.base_amount,
+          initialDeposit,
+        );
+
+        return totalDeposit;
+      }
+    } catch (error) {
+      console.log(error);
     }
     return 0;
   };
 
   turnoverRule = async (transactionInput: TransactionInput) => {
-    const clientDeposit = await this.getClientDeposit(transactionInput);
-    if (clientDeposit) {
-      return clientDeposit > 1000 ? HighTurnoverDiscount.amount : false;
+    try {
+      const clientDeposit = await this.getClientDeposit(transactionInput);
+      if (clientDeposit) {
+        return clientDeposit > 1000 ? HighTurnoverDiscount.amount : false;
+      }
+    } catch (error) {
+      console.log(error);
     }
   };
 
@@ -64,29 +79,34 @@ export class TransactionController {
 
   defaultRule(transactionInput: TransactionInput) {
     const commissionAmount =
-      (transactionInput.amount / 100) * DefaultCommissionPercentage.percentage;
+      (parseInt(transactionInput.amount) / 100) *
+      DefaultCommissionPercentage.percentage;
     return commissionAmount < DefaultCommissionAmount.amount
       ? DefaultCommissionAmount.amount
       : commissionAmount;
   }
 
-  applyRules(
+  async applyRules(
     rules: ((transactionInput: TransactionInput) => any)[],
     transactionInput: TransactionInput,
   ) {
     let commissionAmount;
-    rules.forEach(async (rule) => {
-      if ((await rule(transactionInput)) !== false) {
-        commissionAmount = await rule(transactionInput);
+    for (let i = 0; i < rules.length; i++) {
+      const ruleResult = await rules[i](transactionInput);
+      if (ruleResult) {
+        commissionAmount = ruleResult;
+        break;
+      } else {
+        continue;
       }
-    });
+    }
     return commissionAmount
       ? commissionAmount
       : this.defaultRule(transactionInput);
   }
 
-  async getAmountWithExchange(transactionInput: TransactionInput) {
-    const commissionAmount = await this.applyRules(
+  getAmountWithExchange(transactionInput: TransactionInput) {
+    const commissionAmount = this.applyRules(
       [this.turnoverRule, this.discountRule],
       transactionInput,
     );
@@ -98,16 +118,27 @@ export class TransactionController {
       amount: transactionInput.amount,
     };
 
-    this.exchangeRateService.convertCurrency(exhangeRateInput).subscribe({
-      next: async (exchangeRateResponse) => {
-        this.transactionService.insertOne({
-          ...transactionInput,
-          commission: commissionAmount,
-          base_currency: Currency.EUR,
-          base_amount: exchangeRateResponse.result,
-        });
-      },
-    });
+    try {
+      this.exchangeRateService.convertCurrency(exhangeRateInput).subscribe({
+        next: async (exchangeRateResponse) => {
+          this.transactionService.insertOne({
+            date: transactionInput.date,
+            amount: parseInt(transactionInput.amount),
+            currency: transactionInput.currency,
+            client_id: transactionInput.client_id,
+            commission: await commissionAmount,
+            base_currency: Currency.EUR,
+            base_amount: exchangeRateResponse.result,
+          });
+        },
+        error: (error) => {
+          console.log(error);
+        },
+      });
+    } catch (error) {
+      console.log(error);
+    }
+
     return commissionAmount;
   }
 
@@ -116,13 +147,20 @@ export class TransactionController {
       [this.turnoverRule, this.discountRule],
       transactionInput,
     );
+    try {
+      this.transactionService.insertOne({
+        date: transactionInput.date,
+        amount: parseInt(transactionInput.amount),
+        currency: transactionInput.currency,
+        client_id: transactionInput.client_id,
+        commission: commissionAmount,
+        base_currency: Currency.EUR,
+        base_amount: parseInt(transactionInput.amount),
+      });
+    } catch (error) {
+      console.log(error);
+    }
 
-    this.transactionService.insertOne({
-      ...transactionInput,
-      commission: commissionAmount,
-      base_currency: Currency.EUR,
-      base_amount: transactionInput.amount,
-    });
     return commissionAmount;
   }
 }

@@ -1,28 +1,28 @@
-import { Entity, Column, PrimaryColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity()
 export class Transaction {
-  @PrimaryColumn()
-  id: number;
+  @PrimaryGeneratedColumn()
+  id?: number;
 
-  @Column({ nullable: false })
+  @Column()
   amount: number;
 
-  @Column({ nullable: false })
+  @Column()
   currency: string;
 
-  @Column({ nullable: false })
+  @Column()
   client_id: number;
 
-  @Column({ nullable: false })
-  date: Date;
+  @Column()
+  date: string;
 
-  @Column({ nullable: false })
+  @Column()
   commission: number;
 
-  @Column({ nullable: false })
+  @Column()
   base_currency: string;
 
-  @Column({ nullable: false })
+  @Column()
   base_amount: number;
 }

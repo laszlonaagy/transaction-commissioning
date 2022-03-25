@@ -1,14 +1,8 @@
 export class TransactionInput {
   date: string;
-  amount: number;
+  amount: string;
   currency: string;
   client_id: number;
-}
-
-export class TransactionInsertData extends TransactionInput {
-  commission: number;
-  base_currency?: string;
-  base_amount: number;
 }
 
 export enum Currency {
@@ -20,7 +14,7 @@ export enum DiscountRuleForClientById {
 }
 
 export enum DefaultCommissionPercentage {
-  percentage = 0.05,
+  percentage = 0.5,
 }
 
 export enum DefaultCommissionAmount {

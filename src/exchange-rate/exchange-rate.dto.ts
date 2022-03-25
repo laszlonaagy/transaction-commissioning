@@ -6,7 +6,7 @@ export type ExchangeRateInput = {
   from: string;
   to: string;
   date: string;
-  amount: number;
+  amount: string;
 };
 
 export type ExchangeRateResponse = {
